@@ -1,5 +1,5 @@
 """
-Agents module for Singapore Kopitiam project.
+Agents module for Travel Agent project.
 """
 
 from .coordinator import coordinator
