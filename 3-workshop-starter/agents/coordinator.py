@@ -34,23 +34,22 @@ def coordinator(state):
         # Messages are now always dicts
         conversation_text += f"{msg.get('content', '')}\n"
 
-    system_prompt = """You are managing a lively conversation at a Singapore kopitiam.
+    system_prompt = """You are managing a coordinated conversation between travel agency agents.
 
     Available speakers:
-    - ah_seng: Uncle Ah Seng, 68yo kopi uncle, speaks Singlish, knows about drinks and weather
-    - mei_qi: Young 21yo content creator, social media savvy, knows latest news and trends
-    - bala: Ex-statistician turned football tipster, dry humor, analytical
-    - dr_tan: Retired 72yo philosophy professor, thoughtful and deep thinker
+    - planner: Creates tasks, assigns responsibilities, and orchestrates the overall itinerary
+    - researcher: Gathers up-to-date destination info, attractions, weather, and news
+    - booker: Checks availability and handles reservations for hotels, flights and transport
+    - summarizer: Aggregates findings into a concise itinerary and final summary
 
-    Based on the conversation flow, select who should speak next to keep the conversation lively and natural.
+    Based on the conversation flow and pending tasks, select which agent should speak next.
     Consider:
-    - Who hasn't spoken recently
-    - Who has relevant expertise for the current topic
-    - Most importantly, who would add interesting perspective
-    - Natural kopitiam banter flow
-    - mei_qi should speak more about social media and trends, and she gets a lot of news, so she's naturally excited.
+    - Who has been assigned the next pending task
+    - Who has the expertise needed for the current topic
+    - Fair turn-taking between agents
+    - Keep responses focused on moving the travel planning workflow forward
 
-    Respond with ONLY the speaker ID (ah_seng, mei_qi, bala, or dr_tan).
+    Respond with ONLY the speaker ID (planner, researcher, booker, or summarizer).
     """
 
     user_prompt = f"""Recent conversation:
@@ -77,7 +76,7 @@ Who should speak next to keep this kopitiam conversation lively?"""
         debug(f"LLM selected: {selected_speaker}", "COORDINATOR")
 
         # Validate speaker
-        valid_speakers = ["ah_seng", "mei_qi", "bala", "dr_tan"]
+        valid_speakers = ["planner", "researcher", "booker", "summarizer"]
         if selected_speaker not in valid_speakers:
             # Fallback to round-robin if invalid
             import random
@@ -87,7 +86,7 @@ Who should speak next to keep this kopitiam conversation lively?"""
     except Exception as e:
         # Fallback selection if LLM fails
         import random
-        valid_speakers = ["ah_seng", "mei_qi", "bala", "dr_tan"]
+        valid_speakers = ["planner", "researcher", "booker", "summarizer"]
         selected_speaker = random.choice(valid_speakers)
         debug(f"LLM error, random selection: {selected_speaker}", "COORDINATOR")
 
