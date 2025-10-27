@@ -19,57 +19,46 @@ load_dotenv(override=True)  # Override, so it would use your local .env file
 def build_graph():
     """
     Build the LangGraph workflow.
+
+    Updated flow:
+      START -> human -> coordinator -> planner -> coordinator -> (researcher/booker) -> coordinator -> planner -> summarize -> END
     """
     builder = StateGraph(State)
 
     # Add nodes
     builder.add_node("human", human_input_node)
+    builder.add_node("coordinator", travel_coordinator)
     builder.add_node("planner", planner_node)
     builder.add_node("researcher", researcher_node)
     builder.add_node("booker", booker_node)
     builder.add_node("summarize", summarizer_node)
-    
-    # From START, go to human input
-    builder.set_entry_point("human")
 
-    # Add nodes and routing: human -> coordinator -> agents
-    builder.add_node("coordinator", travel_coordinator)
+    # Connect START to human (optional) and set the entry to the human node so the rendered graph
+    # shows all reachable nodes without treating START as an end node.
+    builder.add_edge(START, "human")
+    builder.set_entry_point("human")  # <-- use the human node name here, not START
 
-    # human input hands off to coordinator which selects next agent
+    # human -> coordinator
     builder.add_edge("human", "coordinator")
+
+    # Coordinator orchestrates flow:
+    # coordinator -> planner
     builder.add_edge("coordinator", "planner")
-    
-    # From agents, check completion status
-    builder.add_conditional_edges(
-        "planner",
-        check_completion,
-        {
-            "continue": "researcher",
-            "summarize": "summarize"
-        }
-    )
-    
-    builder.add_conditional_edges(
-        "researcher",
-        check_completion,
-        {
-            "continue": "booker",
-            "summarize": "summarize"
-        }
-    )
-    
-    builder.add_conditional_edges(
-        "booker",
-        check_completion,
-        {
-            "continue": "planner",
-            "summarize": "summarize"
-        }
-    )
-    
-    # From summary to END
+    # planner -> coordinator (planner returns the parts/tasks to be done)
+    builder.add_edge("planner", "coordinator")
+
+    # coordinator -> researcher/booker (assign respective parts)
+    builder.add_edge("coordinator", "researcher")
+    builder.add_edge("coordinator", "booker")
+
+    # researcher/booker -> coordinator (return results/findings)
+    builder.add_edge("researcher", "coordinator")
+    builder.add_edge("booker", "coordinator")
+
+    # Coordinator may loop back to planner to assemble plan, then summarize -> END
+    builder.add_edge("coordinator", "summarize")
     builder.add_edge("summarize", END)
-    
+
     return builder.compile()
 
 
@@ -79,9 +68,11 @@ def main():
     print("I'll research attractions, check the weather, and book your hotel.")
     print("\nWorkflow:")
     print("1. Get your travel preferences")
-    print("2. Research attractions and check weather")
-    print("3. Find and book suitable hotel")
-    print("4. Create detailed trip summary\n")
+    print("2. Coordinator asks planner to break down tasks")
+    print("3. Planner returns parts to coordinator")
+    print("4. Coordinator assigns parts to researcher/booker")
+    print("5. Researcher/Booker return findings to coordinator")
+    print("6. Coordinator asks planner to assemble final plan and summarize\n")
     print("Initializing travel planning system...")
 
     graph = build_graph()
@@ -121,7 +112,8 @@ def main():
                 summarizer_node(state)
                 break
 
-            # Run coordinator to select next agent and post its thinking trace
+            # Run coordinator to select next agent and post its thinking trace.
+            # Coordinator is the central router in the updated flow.
             updates = travel_coordinator(state)
             # Merge updates into state
             for k, v in updates.items():
@@ -144,6 +136,10 @@ def main():
                 node_updates = researcher_node(state)
             elif next_agent == "booker":
                 node_updates = booker_node(state)
+            elif next_agent == "coordinator":
+                # coordinator may be scheduled as next_agent by planner/researcher/booker;
+                # call travel_coordinator to process returned parts/results.
+                node_updates = travel_coordinator(state)
             else:
                 print(f"Unknown agent: {next_agent}")
                 break
