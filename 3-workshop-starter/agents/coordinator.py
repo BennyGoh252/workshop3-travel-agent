@@ -1,6 +1,7 @@
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from utils import debug
+from agents.participant import travel_participant
 
 
 def coordinator(state):
@@ -97,3 +98,54 @@ Who should speak next to keep this kopitiam conversation lively?"""
         "next_speaker": selected_speaker,
         "volley_msg_left": volley_left - 1
     }
+
+
+def travel_coordinator(state: dict) -> dict:
+        """
+        Simple coordinator for the travel planning workflow.
+
+        Behavior:
+        - If there are tasks in state["shared_state"]["tasks"], pick the first pending
+            task and set `next_agent` to the agent assigned to it.
+        - If no tasks exist yet (immediately after user input), instruct the Planner
+            to start.
+        - Post a short message to the shared `message_board` so the user can see the
+            coordinator is initiating the agent discussion.
+        """
+        print("\n=== Coordinator: orchestrating travel agents ===")
+
+        shared = state.get("shared_state") or {}
+        board = state.get("message_board", [])
+
+        tasks = shared.get("tasks") if shared else None
+
+        # Default to planner when nothing else is scheduled
+        next_agent = "planner"
+
+        if tasks:
+                # Find first pending task
+                pending = [t for t in tasks if (state.get("shared_state", {}).get("task_status", {}).get(t["id"], {}).get("status") == "pending")]
+                if pending:
+                        next_agent = pending[0].get("assigned_to", "planner")
+
+        # Announce to message board so user can see coordinator action
+        board.append({
+                "timestamp": __import__("datetime").datetime.now(),
+                "agent": "coordinator",
+                "content": f"Coordinator requests {next_agent} to begin their tasks.",
+                "payload": {"next_agent": next_agent}
+        })
+
+        print(f"Coordinator selected next agent: {next_agent}")
+
+        # Also ask the agent to post an initial 'thinking' message so the user can
+        # see both the coordinator instruction and the agent's initial trace.
+        try:
+            agent_updates = travel_participant(next_agent, {"message_board": board})
+            # travel_participant returns {"message_board": board}
+            if agent_updates and "message_board" in agent_updates:
+                board = agent_updates["message_board"]
+        except Exception as e:
+            debug(f"Error calling travel_participant: {e}", "COORDINATOR")
+
+        return {"next_agent": next_agent, "message_board": board}

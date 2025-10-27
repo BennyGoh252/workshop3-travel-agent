@@ -203,3 +203,60 @@ IMPORTANT:
             "content": f"{persona['name']}: Well, that's interesting lah..."
         }]
     }
+
+
+# --- Travel agent configuration -------------------------------------------------
+# Simple agent configs for the travel planner system. These agents are lightweight
+# and designed to work with the nodes in `nodes.py`. The actual behaviour for each
+# agent is implemented in the corresponding node function (planner_node,
+# researcher_node, booker_node). This config only exposes metadata for wiring.
+
+TRAVEL_AGENTS = {
+    "planner": {
+        "name": "Planner",
+        "role": "Creates tasks, assigns work and monitors progress",
+        "tools": []
+    },
+    "researcher": {
+        "name": "Researcher",
+        "role": "Searches attractions and gathers weather information",
+        "tools": ["places", "weather"]
+    },
+    "booker": {
+        "name": "Booker",
+        "role": "Finds and books hotels",
+        "tools": ["hotels"]
+    }
+}
+
+
+def travel_participant(agent_id: str, state: dict) -> dict:
+    """
+    Lightweight participant wrapper for travel agents.
+
+    This function is used by the coordinator to trigger an agent's turn and
+    provides consistent console logging and message-board entries so the user
+    can see the agent's "thinking" process.
+
+    Returns a dict with optional "message_board" updates and a small console
+    trace. The heavy lifting is still done in the node implementations.
+    """
+    if agent_id not in TRAVEL_AGENTS:
+        return {}
+
+    agent = TRAVEL_AGENTS[agent_id]
+
+    # Log to console for visibility
+    print(f"\n--- {agent['name']} (agent) invoked: {agent['role']} ---")
+
+    # Post a lightweight thinking message to the shared message board
+    board = state.get("message_board", [])
+    board.append({
+        "timestamp": __import__("datetime").datetime.now(),
+        "agent": agent_id,
+        "content": f"{agent['name']} is thinking about their task...",
+        "payload": None
+    })
+
+    return {"message_board": board}
+
